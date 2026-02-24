@@ -1,0 +1,61 @@
+---
+title: Getting Started with Next.js
+date: 2026-02-23
+description: A comprehensive guide to building modern web applications with Next.js
+---
+
+Next.js has become one of the most popular frameworks for building React applications. In this post, I&apos;ll walk you through why I chose it for this blog and how you can get started.
+
+## Why Next.js?
+
+Next.js offers several advantages that make it an excellent choice for web development:
+
+1. **Server-Side Rendering (SSR)** - Better SEO and performance
+2. **Static Site Generation (SSG)** - Perfect for blogs and portfolios
+3. **File-based routing** - Simple and intuitive routing system
+4. **API routes** - Build your backend without a separate server
+
+## Setting Up Your First Project
+
+Getting started is as simple as running a single command:
+
+```bash
+npx create-next-app@latest my-blog
+```
+
+This will prompt you with a few questions about your preferred configuration. For this blog, I chose:
+- TypeScript
+- Tailwind CSS
+- App Router
+
+## Key Concepts
+
+### File-Based Routing
+
+In Next.js 13+, you create routes by adding files to the `app` directory:
+
+```
+app/
+├── page.tsx        # Homepage (/)
+├── blog/
+│   ├── page.tsx   # Blog listing (/blog)
+│   └── [slug]/
+│       └── page.tsx  # Dynamic blog posts (/blog/my-post)
+```
+
+### Static Export
+
+For deployment to GitHub Pages, you can configure Next.js to export static files:
+
+```javascript
+// next.config.js
+module.exports = {
+  output: 'export',
+}
+```
+
+This generates pure HTML, CSS, and JavaScript files that can be hosted anywhere.
+
+## Conclusion
+
+Next.js provides an excellent developer experience while producing highly performant applications. Whether you&apos;re building a simple blog or a complex web application, it&apos;s worth considering for your next project.

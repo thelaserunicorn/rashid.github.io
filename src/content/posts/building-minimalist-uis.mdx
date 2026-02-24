@@ -1,0 +1,75 @@
+---
+title: Building Minimalist UIs
+date: 2026-02-22
+description: Exploring the principles of minimalist design and how to apply them to web applications
+---
+
+Minimalism in web design isn&apos;t just about having less—it&apos;s about making what you have matter more. In this post, I&apos;ll share some principles I follow when designing clean, functional interfaces.
+
+## The Power of White Space
+
+White space (or negative space) is one of the most powerful tools in a designer&apos;s arsenal. It:
+
+- Improves readability
+- Creates visual hierarchy
+- Guides the user&apos;s attention
+- Makes interfaces feel premium
+
+## Typography as Design
+
+When you strip away decorations, typography becomes your primary design tool. Here are some tips:
+
+### Choose the Right Font Pairing
+
+A classic combination is a serif font for headings and a sans-serif for body text:
+
+```css
+h1, h2, h3 {
+  font-family: 'Instrument Serif', Georgia, serif;
+}
+
+p, a, li {
+  font-family: 'Inter', system-ui, sans-serif;
+}
+```
+
+### Use Scale Wisely
+
+Establish a clear type scale to create hierarchy:
+
+```css
+text-xs    = 0.75rem    /* 12px */
+text-sm    = 0.875rem   /* 14px */
+text-base  = 1rem       /* 16px */
+text-lg    = 1.125rem  /* 18px */
+text-xl    = 1.25rem   /* 20px */
+text-2xl   = 1.5rem    /* 24px */
+text-4xl   = 2.25rem   /* 36px */
+```
+
+## Color: Less Is More
+
+For this blog, I used a restrained color palette inspired by Anthropic:
+
+| Role | Color | Usage |
+|------|-------|-------|
+| Background | `#faf9f5` | Page background |
+| Surface | `#f4f3ee` | Cards, code blocks |
+| Text Primary | `#141413` | Headings, body |
+| Text Secondary | `#b0aea5` | Muted text |
+| Accent | `#d97757` | Links, highlights |
+
+Notice how most of the palette is neutral, with a single accent color used sparingly.
+
+## The Importance of Contrast
+
+Always ensure your text has sufficient contrast with its background. The WCAG recommends:
+
+- **4.5:1** for normal text
+- **3:1** for large text (18px+ bold or 24px+ regular)
+
+Tools like [WebAIM Contrast Checker](https://webaim.org/resources/contrastchecker/) can help verify your choices.
+
+## Conclusion
+
+Minimalist design isn&apos;t about removing features or making things boring—it&apos;s about intentional restraint. By carefully choosing what to show and what to hide, you create experiences that feel thoughtful and refined.

@@ -1,0 +1,121 @@
+---
+title: Understanding TypeScript Generics
+date: 2026-02-21
+description: A deep dive into TypeScript generics with practical examples
+---
+
+TypeScript generics are one of the most powerful features for creating reusable, type-safe code. Let me explain how they work with some practical examples.
+
+## What Are Generics?
+
+Generics allow you to write code that can work with multiple types while still maintaining type safety. They&apos;re like variables for types.
+
+## Basic Example
+
+Here&apos;s a simple function without generics:
+
+```typescript
+function identity(arg: number): number {
+  return arg;
+}
+```
+
+This only works with numbers. But what if we want to accept any type? We could use `any`:
+
+```typescript
+function identity(arg: any): any {
+  return arg;
+}
+```
+
+This works, but we lose type information. Enter generics:
+
+```typescript
+function identity<T>(arg: T): T {
+  return arg;
+}
+```
+
+Now TypeScript infers the type:
+
+```typescript
+const num = identity(42);        // type: number
+const str = identity("hello");   // type: string
+```
+
+## Generic Interfaces
+
+Generics are especially useful with interfaces:
+
+```typescript
+interface ApiResponse<T> {
+  data: T;
+  status: number;
+  message: string;
+}
+
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
+const response: ApiResponse<User> = {
+  data: {
+    id: 1,
+    name: "John Doe",
+    email: "john@example.com"
+  },
+  status: 200,
+  message: "Success"
+};
+```
+
+## Generic Constraints
+
+Sometimes you want to limit what types can be used. Use `extends`:
+
+```typescript
+interface Lengthwise {
+  length: number;
+}
+
+function logLength<T extends Lengthwise>(arg: T): void {
+  console.log(arg.length);
+}
+
+logLength("hello");        // OK
+logLength([1, 2, 3]);      // OK
+logLength({ length: 10 }); // OK
+// logLength(123);         // Error: number doesn't have length
+```
+
+## Real-World Example: Type-Safe API Client
+
+Here&apos;s how you might use generics in an API client:
+
+```typescript
+async function fetchApi<T>(endpoint: string): Promise<T> {
+  const response = await fetch(endpoint);
+  
+  if (!response.ok) {
+    throw new Error(`API Error: ${response.status}`);
+  }
+  
+  return response.json();
+}
+
+// Usage
+interface Post {
+  id: number;
+  title: string;
+  body: string;
+}
+
+const posts = await fetchApi<Post[]>('https://api.example.com/posts');
+const post = await fetchApi<Post>('https://api.example.com/posts/1');
+```
+
+## Conclusion
+
+Generics might seem complex at first, but they&apos;re invaluable for building robust, reusable TypeScript code. Start using them in your utility functions and API layers, and you&apos;ll quickly see the benefits.
