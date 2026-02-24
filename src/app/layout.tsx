@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Instrument_Serif, Bricolage_Grotesque } from "next/font/google";
 import Link from "next/link";
+import Image from "next/image";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { NavLink } from "@/components/NavLink";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -22,6 +23,9 @@ const bricolage = Bricolage_Grotesque({
 export const metadata: Metadata = {
   title: "Rashid",
   description: "A minimal portfolio with a markdown blog",
+  icons: {
+    icon: "/images.png",
+  },
 };
 
 export default function RootLayout({
@@ -38,8 +42,8 @@ export default function RootLayout({
           <div className="min-h-screen flex flex-col">
             <header className="border-b border-border">
               <nav className="max-w-3xl mx-auto px-6 py-4 flex justify-between items-center">
-                  <Link href="/" className="font-serif text-xl">
-                    Rashid
+                  <Link href="/" className="flex items-center">
+                    <Image src="/images.png" alt="Rashid" width={32} height={32} className="rounded-full" />
                   </Link>
                 <div className="flex gap-6 text-sm items-center">
                   <NavLink href="/projects">Projects</NavLink>
