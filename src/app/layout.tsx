@@ -26,6 +26,28 @@ export const metadata: Metadata = {
   icons: {
     icon: "/images.png",
   },
+  openGraph: {
+    title: "Rashid",
+    description: "A minimal portfolio with a markdown blog",
+    url: "https://rashid.pages.dev",
+    siteName: "Rashid",
+    images: [
+      {
+        url: "/og-image.svg",
+        width: 1200,
+        height: 630,
+        alt: "Rashid's Blog",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Rashid",
+    description: "A minimal portfolio with a markdown blog",
+    images: ["/og-image.png"],
+  },
 };
 
 export default function RootLayout({
