@@ -15,12 +15,12 @@ This guide skips the theory and goes straight to production. Real scenarios, rea
 
 
 
-> This blog is still a work in progress, I am trying to learn as well !
+> This blog is still a work in progress, I am trying to learn as well ! I am trying my best to scour the man pages and simulate real problems.
 ---
 
 ## 1. grep: Searching Inside Files
 
-`grep` is your first tool when something goes wrong. It searches file contents and prints every line that matches your pattern. Think of it as CTRL+F for the command line—but it works on 10GB files without breaking a sweat.
+`grep` is your first tool when something goes wrong. It searches file contents and prints every line that matches your pattern. Think of it as CTRL+F for the command line but it works on large files without breaking a sweat.
 
 **The basic syntax:** `grep [options] "pattern" file`
 
@@ -208,7 +208,6 @@ ps aux | grep root | grep -v "^\S*\s*root\s*1 " | grep -v sshd | grep -v grep
 ps aux --sort=-%cpu | grep -v PID | head -20
 ```
 
-> **Stop and think:** If you use `grep -v "INFO" app.log | grep -v "DEBUG"`, which log levels are you isolating, and what useful lines might you accidentally remove? Negative filters reduce noise, but every exclusion is also a bet about what does not matter.
 
 ---
 
@@ -324,151 +323,9 @@ sed '/Production/i # Warning: Edit carefully' config.conf
 
 # Replace a specific line number
 sed -i '3s/old_value/new_value/' config.conf
+
 ```
 
-### Real Production Example: Cleaning Up Ansible Output
-
-Your Ansible runs produce verbose output, but you only need the changed hosts for reporting:
-
-```bash
-# Extract only changed hosts from ansible output
-cat ansible-output.log | sed -n '/^changed: \[/p' | sed 's/^changed: \[//; s/\]//'
-
-# Remove timestamp prefixes from application logs
-sed 's/^[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}T[0-9]\{2\}:[0-9]\{2\}:[0-9]\{2\}Z //' app.log
-
-# Extract just error messages (remove level prefixes)
-cat app.log | sed 's/^ERROR: //; s/^WARN: //; s/^INFO: //'
-```
-
-### Multi-Command Sequences
-
-Sed can run multiple commands in sequence using `-e`:
-
-```bash
-# Multiple replacements in one pass
-sed -e 's/foo/bar/g' -e 's/baz/qux/g' file.txt
-
-# Chaining operations: remove comments, blank lines, then replace values
-sed -e '/^#/d' -e '/^$/d' -e 's/old/new/g' config.conf
-```
-
-### Real Production Example: Nginx Access Log Parsing
-
-Your nginx access log format is:
-```
-127.0.0.1 - frank [10/Oct/2023:13:55:36 -0700] "GET /apache_pb.gif HTTP/1.1" 200 2326 "http://example.com/start.html" "Mozilla/4.0"
-```
-
-You want to extract just the IPs and URLs for analysis:
-
-```bash
-# Extract client IPs
-cat access.log | sed 's/^\([0-9.]*\).*/\1/' | sort | uniq -c | sort -rn | head -20
-
-# Extract requested URLs
-cat access.log | sed 's/.*"GET \(.*\) HTTP.*/\1/' | sort | uniq -c | sort -rn | head -20
-
-# Extract status codes
-cat access.log | sed 's/.*HTTP\/1\.1" \([0-9]*\).*/\1/' | sort | uniq -c | sort -rn
-```
-
-### Address Syntax
-
-Sed can apply commands only to specific lines:
-
-```bash
-# Only on lines 1-10
-sed '1,10s/old/new/g' file
-
-# Only on lines matching a pattern
-sed '/error/s/old/new/g' file
-
-# Only on the last line
-sed '$s/old/new/' file
-
-# Every other line (odd lines)
-sed 'n;d' file
-```
-
-### Real Production Example: Updating Configuration Values
-
-You need to update the max connections setting across all your nginx upstream blocks:
-
-```nginx.conf
-# Before
-upstream backend {
-    server 10.0.0.5:8080;
-    server 10.0.0.6:8080;
-    max_conns 100;
-}
-
-# After
-upstream backend {
-    server 10.0.0.5:8080;
-    server 10.0.0.6:8080;
-    max_conns 500;
-}
-```
-
-```bash
-# Find and update only the max_conns directive
-sed -i '/upstream/,/}/ { /max_conns/ s/100/500/; }' /etc/nginx/nginx.conf
-
-# Or for a specific upstream block only
-sed -i '/upstream api_backend/,/}/ { /max_conns/ s/100/500/; }' /etc/nginx/nginx.conf
-```
-
-### Case Studies: sed in Action
-
-**Scenario: Fixing broken cron job timestamps**
-
-Your cron jobs are logging with a custom format, but your log analyzer expects ISO 8601. The cron output is:
-```
-May 23 14:30:15 servername CRON[12345]: (root) CMD (/opt/scripts/backup.sh)
-```
-
-You need:
-```
-2026-05-23T14:30:15 servername CRON[12345]: (root) CMD (/opt/scripts/backup.sh)
-```
-
-```bash
-# Transform the timestamp
-sed -E 's/^([A-Za-z]+ [ 0-9]+ [0-9]+:[0-9]+:[0-9]+)/2026-\1/' cron.log | \
-sed 's/  / /g'
-```
-
-**Scenario: Merging multi-line logs into single lines**
-
-Your Java application logs stack traces across multiple lines:
-```
-2026-05-23 14:30:15 ERROR Database connection failed
-java.sql.SQLException: Connection timeout
-    at com.example.DB.connect(DB.java:45)
-    at com.example.API.handleRequest(API.java:78)
-2026-05-23 14:30:16 INFO Request processed
-```
-
-```bash
-# Join lines starting with whitespace (continuation) to previous line
-sed ':a; N; s/\n[[:space:]]/ /; ba' app.log
-```
-
-### Alternate Delimiters
-
-When your pattern contains slashes, use a different delimiter to avoid escaping.
-
-```bash
-# Instead of: sed 's/http:\/\/old.com/http:\/\/new.com/g'
-sed 's|http://old.com|http://new.com|g' file.txt
-
-# Instead of: sed 's/\/var\/www\/html/\/var\/www\/vhosts/g'
-sed 's|/var/www/html|/var/www/vhosts|g' config.conf
-
-# Using # as delimiter for path substitution
-sed 's#http://#https://#g' nginx.conf
-```
 
 ---
 
@@ -549,183 +406,9 @@ awk '/error/ {print}' file.txt
 awk '$3 > 100 {print}' file.txt      # Column 3 greater than 100
 awk '$1 == "root" {print}' /etc/passwd
 awk 'NR > 10 {print}' file.txt        # Skip first 10 lines
-
-# BEGIN and END blocks
-awk 'BEGIN {print "Header"} {print} END {print "Footer"}' file.txt
 ```
 
-### Real Production Example: Database Slow Query Log Analysis
 
-Your PostgreSQL slow query log entries look like:
-```
-2026-05-23 14:30:15.123 UTC [12345] LOG:  duration: 2456.234 ms  statement: SELECT * FROM users WHERE email = 'test@example.com'
-```
-
-```bash
-# Extract query duration and normalize to seconds
-awk '/duration:/ {match($4, /[0-9.]+/); duration = substr($4, RSTART, RLENGTH); print duration/1000 "s", $NF}' slowquery.log
-
-# Find queries over 1 second
-awk '/duration:/ && $4 ~ /[0-9]+\.[0-9]+/ {split($4,a,":"); if (a[1]+0 > 1) print}' slowquery.log
-
-# Group by query pattern (remove literals)
-awk '/statement:/ {
-    sub(/WHERE.*/, "WHERE ...", $0);
-    sub(/VALUES.*/, "VALUES ...", $0);
-    count[$0]++
-}
-END {for (q in count) print count[q], q}' slowquery.log | sort -rn
-```
-
-### Calculations
-
-```bash
-# Sum a column
-awk '{sum += $1} END {print sum}' file.txt
-
-# Average
-awk '{sum += $1; count++} END {print sum/count}' file.txt
-
-# Maximum
-awk 'NR==1 || $1>max {max=$1} END {print max}' file.txt
-
-# Formatted output
-awk '{printf "%-10s %5d\n", $1, $2}' file.txt
-```
-
-### Real Production Example: System Resource Summary
-
-Generate a daily resource usage report:
-
-```bash
-# From sar output or /proc/stat
-# Calculate average CPU usage from multiple samples
-awk '/^%idle/ {next} /^Average/ {next} {sum+=$NF; count++} END {print "Average idle:", sum/count "%"}' cpu.log
-
-# Find peak memory usage
-awk '/MemTotal/ {total=$2} /MemAvailable/ {avail=$2} END {print "Used:", (total-avail)/1024/1024 "GB"}' meminfo.txt
-
-# Calculate network throughput from iptables stats
-awk '/Chain INPUT/,/packets/ {if ($2 ~ /^[0-9]+$/) bytes+=$2} END {print "Total INPUT bytes:", bytes/1024/1024 "MB"}' iptables.log
-```
-
-### Associative Arrays
-
-Arrays let awk group data without a separate database.
-
-```bash
-# Count by field
-awk '{count[$1]++} END {for (k in count) print k, count[k]}' file.txt
-
-# Sum by group
-awk '{sum[$1] += $2} END {for (k in sum) print k, sum[k]}' file.txt
-
-# Unique values
-awk '!seen[$1]++' file.txt
-```
-
-### Real Production Example: Top Endpoints by Response Time
-
-```bash
-# Parse nginx logs and find slowest endpoints
-awk -F'"' '{
-    split($2, parts, " ");
-    url = parts[2];
-    split($NF, status, " ");
-    code = status[1]+0;
-    if (code >= 200 && code < 300) success[url]++;
-    else errors[url]++
-}
-END {
-    print "=== Successes by URL ===";
-    for (u in success) print success[u], u;
-    print "=== Errors by URL ===";
-    for (u in errors) print errors[u], u
-}' access.log | sort -rn | head -20
-```
-
-### Advanced awk Patterns
-
-```bash
-# Multi-dimensional arrays (simulated)
-awk '{
-    arr[$1][$2]++
-}
-END {
-    for (i in arr)
-        for (j in arr[i])
-            print i, j, arr[i][j]
-}' file.txt
-
-# Functions in awk
-awk '
-function abs(x) { return x < 0 ? -x : x }
-{ delta = $1 - prev; if (NR > 1) print abs(delta); prev = $1 }
-' data.txt
-
-# Custom field separators
-awk -F'[;:]' '{print $1, $3}' file.txt   # Split by ; or :
-awk 'BEGIN {FS="[,;]"} {print $1, $3}' file.txt
-```
-
-### Real Production Example: Security Event Correlation
-
-Your SIEM is down, but you need to correlate SSH failures with successful logins to find compromised accounts:
-
-```bash
-# Extract all SSH events
-grep "sshd" /var/log/auth.log | awk -F: '{
-    datetime = $1 ":" $2 ":" $3;
-    if ($0 ~ /Failed password/) {
-        split($NF, parts, " ");
-        user = parts[3];
-        ip = parts[9];
-        failed[user][ip]++;
-        failed_time[user][ip] = datetime
-    }
-    if ($0 ~ /Accepted password/) {
-        split($NF, parts, " ");
-        user = parts[3];
-        ip = parts[7];
-        success[user][ip]++;
-    }
-}
-END {
-    print "=== SUSPICIOUS ACTIVITY ===";
-    for (u in failed) {
-        for (ip in failed[u]) {
-            if (success[u] > 0) {
-                print "COMPROMISED:", u, "IP:", ip, "Failed:", failed[u][ip], "Success:", success[u]+0
-            }
-        }
-    }
-}' | sort -k5 -rn
-```
-
-This identifies accounts that had both failed attempts AND successful logins—potentially an attacker who found weak credentials.
-
-### String Functions in awk
-
-```bash
-# length, substr, index, gsub
-awk '{
-    if (length($0) > 80) print "Long line:", $0
-    print "First 10 chars:", substr($0, 1, 10)
-}' file.txt
-
-# Replace all occurrences
-awk '{gsub(/ERROR/, "ALERT"); print}' app.log
-
-# Split into array
-awk '{
-    n = split($1, parts, "/");
-    print "Domain:", parts[n-1], "TLD:", parts[n]
-}' url_list.txt
-```
-
-> **Stop and think:** Running `awk '!seen[$1]++'` against a 50GB access log with highly randomized, unique data points can exhaust system memory. For unbounded values like request IDs, prefer `sort | uniq` or streaming approximations instead.
-
----
 
 ## Combining All Three: The 3 AM Incident
 
@@ -883,5 +566,3 @@ The `-exec` and `xargs` choice is a performance and safety decision, not a style
 | Count by group | `awk '{count[$1]++} END {for(k in count) print k, count[k]}' file` |
 
 ---
-
-These tools aren't relics—they're precision instruments. When your phone buzzes at 2 AM, you'll be ready.
