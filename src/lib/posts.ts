@@ -63,10 +63,10 @@ export function getAllPosts(): PostMeta[] {
         title: post.title,
         date: post.date,
         description: post.description,
-        image: post.image,
+        image: post.image ?? undefined,
       };
     })
-    .filter((post): post is PostMeta => post !== null)
+    .filter((post): post is NonNullable<typeof post> => post !== null)
     .sort((a, b) => (new Date(b.date) > new Date(a.date) ? 1 : -1));
 
   return posts;
