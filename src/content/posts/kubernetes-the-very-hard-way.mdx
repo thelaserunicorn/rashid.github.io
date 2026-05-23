@@ -1,0 +1,132 @@
+Note: I will update this blog as I go through  [Kelsey Hightower's *Kubernetes the Hard Way* tutorial](https://github.com/kelseyhightower/kubernetes-the-hard-way) . The blog will be all over the place for now.
+
+## Why Am I Doing This the "Very" Hard Way?
+
+I’m taking a comprehensive, hands-on approach that goes far beyond typical Kubernetes tutorials. I don't want to simply assemble a cluster, check a box, and move on. Instead, I want to actively interact with every single component as I install it.
+
+For me, this means:
+
+- **Testing each component individually** before moving to the next.
+- **Understanding the APIs and interfaces** each component exposes.
+- **Seeing exactly how** these components communicate with each other.
+- **Exploring the configuration options** and seeing their direct effects.
+
+This thorough, step-by-step interaction with each building block is exactly why I’m doing this it’s the most boots on the ground way to learn. By the end of this journey, I want to have a deep understanding of how Kubernetes works under the hood. I won't just know how to use it, I'll know how it actually functions internally.
+
+## Prologue
+
+Kubernetes needs a container runtime to actually run containers and containerd is its primary container runtime. [containerd](https://containerd.io/) is an industry-standard **container runtime** that provides the fundamental tools for running containers.
+
+Originally developed by Docker, containerd is now [maintained by the CNCF](https://www.cncf.io/projects/containerd) and has become one of the most widely adopted container runtimes in the cloud-native ecosystem.
+
+but **containerd** is a *high-level* **container runtime** that provides a wide range of container management services (like image management, storage, and networking), but delegates certain tasks to specialized components. One such task is actually running the container process, which containerd delegates to a *low-level* **OCI runtime**.
+
+In practical terms, containerd manages the "what" (which container to run, with what image, network, and storage), while OCI runtimes handle the "how" (the underlying isolation mechanisms like cgroups, namespaces, or VMs). If you try pulling an image and running it will give an error.
+
+```
+sudo ctr images pull ghcr.io/sagikazarmark/docker-hello-world:latest
+```
+
+Copy to clipboard
+
+With the **image pulled**, you can run the container:
+
+```
+sudo ctr run --rm ghcr.io/sagikazarmark/docker-hello-world:latest hello
+```
+
+Copy to clipboard
+
+⚠️ **This command will fail** because no OCI runtime is installed yet. The error output shows what's missing.
+
+The **reference OCI runtime implementation** is [`runc`](https://github.com/opencontainers/runc), which serves as the **default runtime** for containerd.
+
+With runc installed and configured, the container will now run successfully:
+
+Just as containerd delegates container process execution to OCI runtimes, it delegates network configuration to specialized components through the Container Network Interface (CNI).
+
+CNI is a specification and set of libraries for configuring network interfaces in Linux containers. It provides a standardized way for container runtimes to set up container networking, including creating network namespaces, configuring IP addresses, and establishing connectivity between containers and the host system.
+
+In this lesson, you learned about **containerd**, the high-level container runtime that serves as the foundation for container management on Kubernetes worker nodes.
+
+**Key takeaways:**
+
+- **Industry standard**: containerd is a CNCF-maintained, industry-standard container runtime that originated from Docker and powers container execution in Kubernetes clusters
+- **Modular architecture**: containerd orchestrates container operations while delegating specific tasks to specialized components: OCI runtimes (like runc) handle process execution and CNI plugins manage networking
+- **Essential services**: Provides container lifecycle management, image management, storage coordination, and network interface setup for Pods
+- **Management tools**: Use `ctr` for low-level debugging and `nerdctl` for Docker-like commands when working directly with containerd
+
+With containerd now running and fully configured with runc and CNI plugins, you're ready to set up **kubelet**, the Kubernetes node agent that will use containerd to manage Pods.
+
+## Kubelet
+
+## Overview
+
+A container runtime alone can't join a cluster or accept work from a control plane. That's kubelet's job. I'll install **kubelet**, the node agent that bridges Kubernetes and the container runtime.
+
+**Objectives:**
+
+- Understand kubelet's role within a Kubernetes cluster
+- Install and configure kubelet from scratch
+- Observe how kubelet interacts with containerd via the CRI (Container Runtime Interface)
+- Understand the relationship between Pods and containers
+- Run Pods using kubelet without an API server
+- Learn basic debugging techniques for kubelet
+
+**kubelet** is the **primary node agent** that runs on every worker node in a Kubernetes cluster. As one of the core components that makes Kubernetes work, it acts as the bridge between the Kubernetes control plane and the container runtime on each node.
+
+kubelet operates in a continuous reconciliation loop:
+
+1. **Watches** for Pod specifications from the API server
+2. **Compares** the desired state (what should be running) with the actual state (what is running)
+3. **Takes action** to bring the actual state in line with the desired state
+4. **Reports** the current status back to the control plane
+
+In essence, kubelet is the **"hands and feet"** of Kubernetes on each node: it takes declarative Pod specifications from the control plane and makes them a reality by managing containers on the worker nodes.
+
+However, kubelet doesn't run containers directly. Instead, it delegates this responsibility to a **container runtime** like [containerd](https://containerd.io/) or [CRI-O](https://cri-o.io/). To support multiple runtimes and provide flexibility in runtime selection, kubelet communicates with these runtimes through the [Container Runtime Interface (CRI)](https://kubernetes.io/docs/concepts/architecture/cri/).
+
+The [**Container Runtime Interface (CRI)**](https://kubernetes.io/docs/concepts/architecture/cri/) is a gRPC API that defines a standard interface for kubelet to interact with container runtimes. It enables kubelet to work with any CRI-compatible container runtime, without runtime-specific code compiled into kubelet.
+
+The [CRI API](https://github.com/kubernetes/cri-api/blob/master/pkg/apis/runtime/v1/api.proto) consists of two main services:
+
+- **RuntimeService**: Manages **pod sandboxes** and containers (create, start, stop, remove, etc.)
+- **ImageService**: Manages container images (pull, list, remove, etc.)
+
+When kubelet needs to:
+
+1. **Create a pod**: It calls the CRI `RunPodSandbox` method
+2. **Start a container**: It calls the CRI `CreateContainer` and `StartContainer` methods
+3. **Pull an image**: It calls the CRI `PullImage` method
+4. **Get pod status**: It calls the CRI `PodSandboxStatus` method
+
+kubelet exposes an HTTP API endpoint (typically on port 10250) that allows the Kubernetes API server and other components to interact with it.
+
+This endpoint provides access to:
+
+- Pod logs and exec sessions
+- Node metrics and health information
+
+Normally, this endpoint is secured using TLS and authentication/authorization mechanisms. However, for the purposes of simplicity, I will disable authentication and authorization to simplify the setup.
+
+⚠️ Do **NOT** disable authentication and authorization in production environments.
+
+[
+
+## Static Pods
+
+**Static Pods** are Pods managed directly by kubelet on a specific node rather than by the Kubernetes API server.
+
+Unlike regular Pods that are created and managed through the cluster's control plane, static Pods are defined by placing Pod manifest files in a directory that kubelet monitors.
+
+When kubelet finds a Pod manifest in the static Pod directory, it automatically creates and manages that Pod. If the Pod crashes or stops, kubelet automatically restarts it (through the container runtime).
+
+kubelet also creates a **mirror Pod** in the Kubernetes API server for each static Pod. This mirror Pod allows you to see the static Pod when you run `kubectl get pods`, but you cannot control the static Pod through the API server: only kubelet can manage it directly.
+
+**Key takeaways:**
+
+- **Control plane bridge**: kubelet acts as the essential link between the Kubernetes control plane and the container runtime, translating API server instructions into container operations
+- **Reconciliation loop**: Continuously watches for Pod specifications, compares desired vs actual state, and takes corrective actions to maintain cluster consistency
+- **CRI delegation**: Doesn't run containers directly but communicates with container runtimes like containerd through the Container Runtime Interface (CRI)
+- **Static Pods**: Enables running critical cluster components directly on nodes before the control plane becomes available, with automatic restart capabilities
+- **API endpoint**: Provides an HTTP interface on port 10250 for log access, metrics, and container execution, essential for cluster operations
