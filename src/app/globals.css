@@ -179,3 +179,30 @@ button:active {
 [data-theme="dark"] .hljs-function .hljs-keyword {
   color: #ff7b72;
 }
+
+/* Code block mobile overflow fix */
+pre {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100vw;
+  position: relative;
+}
+
+pre code {
+  display: block;
+  min-width: max-content;
+}
+
+/* Dark mode list bullets */
+.prose ul,
+.prose ol {
+  color: var(--foreground);
+}
+
+.prose li::marker {
+  color: var(--secondary);
+}
+
+[data-theme="dark"] .prose li::marker {
+  color: #9a9890;
+}
