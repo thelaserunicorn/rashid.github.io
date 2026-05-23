@@ -7,17 +7,17 @@ image: "/linux-commands-og.svg"
 published: true
 ---
 
-Every engineer reaches that moment at 2 AM. You're staring at a 10GB log file, your IDE is chugging, and you just want to find why payments are failing. You could open the file. You could wait. Or you could pipe it through three commands and have your answer in seconds.
+Every engineer reaches that moment at 2 AM. You're staring at a 10GB log file, your IDE is chugging, and you just want to find why your payment system are failing. You could open the file. You could wait. Or you could pipe it through three commands and have your answer in seconds.
 
-`grep`, `awk`, and `sed` are the tools that make engineers look like they know what they're doing. They're not glamorous. They don't have splashy GUIs. But they turn chaos into clarity—when you know how to use them.
+`grep`, `awk`, and `sed` are the tools that make engineers look like they know what they're doing. They're not glamorous. They don't have splashy GUIs. But they turn chaos into clarity when you know how to use them.
 
-This guide skips the theory and goes straight to production. nginx configs, Apache logs, SSH attacks, database slow queries. Real scenarios, real commands, real fixes.
+This guide skips the theory and goes straight to production. Real scenarios, real commands, real fixes. For the lazy engineer.
 
 ---
 
 ## 1. grep: Searching Inside Files
 
-Where `find` locates paths, `grep` searches the contents of text streams and files. It prints lines that match a pattern, which means its natural unit of evidence is a line of text. Logs, configuration files, process listings, environment variables—all become searchable once you remember they're just streams of lines.
+`grep` is your first tool when something goes wrong. It searches file contents and prints every line that matches your pattern. Think of it as CTRL+F for the command line—but it works on 10GB files without breaking a sweat.
 
 **The basic syntax:** `grep [options] "pattern" file`
 
