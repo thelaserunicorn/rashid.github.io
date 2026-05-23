@@ -1,0 +1,887 @@
+---
+title: "The Lazy Engineer's Guide to grep, awk, and sed"
+description: "A practical survival guide for finding, fixing, and analyzing text in production without losing your mind."
+date: "2026-04-23"
+tags: ["devops", "linux", "bash", "log-analysis"]
+image: "/linux-commands-og.svg"
+published: true
+---
+
+NOTE: This is a draft
+
+These three Unix tools are the bread and butter of any engineer. They transform a chaotic wall of text into actionable evidence. They let you ask questions of your data instead of manually digging through it. This guide is your survival kit—written for the engineer who needs results now, not a computer science lecture.
+
+We'll cover real production scenarios: nginx configuration debugging, Apache access log analysis, SSH authentication failure hunting, database slow query identification, and systemd service log parsing. Each example comes from actual incidents I've seen or personally debugged at 3 AM.
+
+---
+
+## 1. grep: Searching Inside Files
+
+Where `find` locates paths, `grep` searches the contents of text streams and files. It prints lines that match a pattern, which means its natural unit of evidence is a line of text. Logs, configuration files, process listings, environment variables—all become searchable once you remember they're just streams of lines.
+
+**The basic syntax:** `grep [options] "pattern" file`
+
+### Basic Search
+
+```bash
+# Find lines containing "error" in a log file
+grep "error" /var/log/syslog
+
+# Case-insensitive search (matches Error, ERROR, error, eRRoR)
+grep -i "error" /var/log/syslog
+
+# Search multiple files at once
+grep "timeout" server1.log server2.log server3.log
+
+# Search all files in a directory recursively
+grep -r "password" /etc/
+# CAUTION: this can reveal sensitive information -- use responsibly
+```
+
+### Real Production Example: Debugging nginx Configuration
+
+You're called in because some users are getting 502 Bad Gateway errors but others aren't. The nginx error log shows this intermittently:
+
+```
+2026/05/23 02:15:43 [error] 12847#12847: *4521 upstream prematurely closed connection while reading response header of upstream
+```
+
+But you need context. How many of these errors? Are they concentrated on a specific upstream? Is it related to a specific backend server? Start with counting:
+
+```bash
+# Count all 502 errors in the last hour
+grep "502" /var/log/nginx/error.log | wc -l
+
+# Get unique upstream endpoints causing 502s
+grep "502" /var/log/nginx/error.log | grep -oP 'upstream "[^"]+' | sort | uniq -c | sort -rn
+
+# Find which backend servers are failing
+grep "upstream prematurely closed" /var/log/nginx/error.log | grep -oP 'client: \K[0-9.]+' | sort | uniq
+```
+
+The grep output might reveal that 90% of your 502s are hitting `upstream "php_backend"` while `node_backend` is fine. That's your signal to check PHP-FPM status and configuration.
+
+### When to Use Case Sensitivity
+
+Case sensitivity is a choice about signal and noise. During early triage, `grep -i` helps catch inconsistent capitalization across tools and languages. During a precise audit, case-sensitive matching may be safer because it avoids unrelated words. The point is not that one flag is always right—choose based on the question you're asking.
+
+### Context Flags
+
+Context flags turn isolated matches into useful evidence. A timeout line by itself may not show the user ID, request path, or retry that caused it. By asking for lines before, after, or around the match, you let grep preserve the nearby timeline without opening a large file in an editor.
+
+```bash
+# Show 3 lines AFTER each match (A = After)
+grep -A 3 "Exception" app.log
+# Great for seeing stack traces that follow an error
+
+# Show 2 lines BEFORE each match (B = Before)
+grep -B 2 "failed" deploy.log
+# Great for seeing what command caused a failure
+
+# Show 3 lines before AND after each match (C = Context)
+grep -C 3 "timeout" app.log
+# The full picture around each match
+
+# Combine with case-insensitive
+grep -i -C 5 "critical" /var/log/syslog
+```
+
+### Real Production Example: Analyzing SSH Brute Force Attacks
+
+Your server is being targeted. You're getting alerts that load is spiking, and you suspect SSH brute force. Let's gather evidence:
+
+```bash
+# Find all failed SSH login attempts
+grep "Failed password" /var/log/auth.log
+
+# Get the top offending IP addresses
+grep "Failed password" /var/log/auth.log | grep -oP '\d+\.\d+\.\d+\.\d+' | sort | uniq -c | sort -rn | head -20
+
+# See when the attacks started (timestamp patterns)
+grep "Failed password" /var/log/auth.log | awk '{print $1, $2}' | sort | uniq -c
+
+# Find successful logins to see if any succeeded
+grep "Accepted password" /var/log/auth.log | tail -50
+```
+
+The output might show you have 15,000 failed attempts from 200 unique IPs over the past hour, but zero successful logins. That's either good news (attacks failing) or bad news (you're blocking legitimate users). The timestamp breakdown might show the attacks started at 4 AM UTC when your US users are sleeping.
+
+### Counting and Listing
+
+Counting and listing modes help when the question is about scope rather than content. If every application host has a few errors, the incident looks different from one host producing thousands.
+
+```bash
+# Count matching lines (instead of showing them)
+grep -c "404" access.log
+# Output: 187 (just the number)
+
+# Show only filenames that contain a match (not the lines themselves)
+grep -rl "TODO" /project/src/
+# Output: list of files, one per line
+
+# Show line numbers alongside matches
+grep -n "def main" *.py
+# Output: main.py:42:def main():
+```
+
+### Real Production Example: Finding Configuration Drift
+
+You have 50 servers and suspect configuration drift is causing inconsistencies. Find all servers that have commented out the security setting:
+
+```bash
+# Across all your nginx config files
+grep -r "# ssl_protocols" /etc/nginx/
+
+# Find all servers NOT running TLS 1.3
+grep -r "ssl_protocols TLSv1.2" /etc/nginx/
+
+# Find commented-out security headers
+grep -r "#.*X-Frame-Options" /etc/nginx/
+```
+
+### Inversion and Anchors
+
+Inversion and anchors are the beginning of pattern discipline. Removing DEBUG lines can make an operational log readable, while `^#` targets comments and `\.conf$` targets filenames ending in a specific extension.
+
+```bash
+# Show lines that do NOT match (invert)
+grep -v "DEBUG" app.log
+# Shows everything except debug lines -- great for reducing noise
+
+# Match whole words only (not partial matches)
+grep -w "error" app.log
+# Matches "error" but NOT "errors" or "error_handler"
+
+# Match at the start or end of a line
+grep "^#" config.conf     # Lines starting with # (comments)
+grep "\.conf$" filelist  # Lines ending with .conf
+```
+
+### Real Production Example: Extracting Non-Comment Lines from Config
+
+You're handed a 2000-line nginx.conf and need to find only the active (non-commented) directives to understand the actual running configuration:
+
+```bash
+# Get only active configuration lines
+grep -v "^#" /etc/nginx/nginx.conf | grep -v "^$" | grep -v "[[:space:]]*#"
+
+# Find all listen directives (active)
+grep -v "^#" /etc/nginx/sites-enabled/*.conf | grep "^[[:space:]]*listen"
+
+# Get all server_name declarations to map all vhosts
+grep -v "^#" /etc/nginx/sites-enabled/*.conf | grep "server_name"
+```
+
+### grep + Pipelines
+
+grep becomes especially powerful when it filters the output of commands that were not designed as search tools. Process listings, package inventories, and environment dumps all produce text. Once that text enters stdout, grep can narrow it, and the next command can count, sort, or display it.
+
+```bash
+# Find running processes by name
+ps aux | grep nginx
+
+# Filter command history
+history | grep "docker"
+
+# Find listening network ports for a specific service
+ss -tlnp | grep 8080
+
+# Check if a package is installed
+dpkg -l | grep "nginx"
+
+# Find environment variables related to Java
+env | grep -i java
+```
+
+### Real Production Example: Service Health Check
+
+Your monitoring shows high memory usage on a server. Quick triage:
+
+```bash
+# Find Java processes and their memory usage
+ps aux | grep java | grep -v grep | awk '{print $11, $6/1024 "MB"}'
+
+# Find all processes running as root that aren't init or sshd
+ps aux | grep root | grep -v "^\S*\s*root\s*1 " | grep -v sshd | grep -v grep
+
+# Find processes with high CPU but low activity (possible stuck)
+ps aux --sort=-%cpu | grep -v PID | head -20
+```
+
+> **Stop and think:** If you use `grep -v "INFO" app.log | grep -v "DEBUG"`, which log levels are you isolating, and what useful lines might you accidentally remove? Negative filters reduce noise, but every exclusion is also a bet about what does not matter.
+
+---
+
+## 2. sed: Stream Editor
+
+The sed command processes text line-by-line, allowing you to modify file content without opening it in a text editor. It's the go-to tool for find-and-replace operations on streams. Unlike grep, sed can modify content—not just find it.
+
+**The basic syntax:** `sed [options] 'script' file`
+
+### Basic Substitution
+
+```bash
+# Replace "hello" with "world" in sample.txt
+# (first occurrence per line only)
+sed 's/hello/world/' sample.txt
+
+# Replace ALL occurrences per line with the /g flag
+sed 's/hello/world/g' sample.txt
+
+# Case-insensitive replacement
+sed 's/error/ERROR/gi' app.log
+```
+
+### Real Production Example: Mass Configuration Updates
+
+You need to update the database connection string across 40 application servers after a database migration. Instead of SSHing into each one:
+
+```bash
+# On your management server, update all app configs
+# Change old DB hostname to new one
+sed 's/old-db-host.internal/new-db-host.internal/g' /app/config/database.conf
+
+# Update across multiple files
+for f in /app/config/*.conf; do
+    sed -i.bak 's/old-db-host.internal/new-db-host.internal/g' "$f"
+done
+
+# Verify the changes
+grep "new-db-host.internal" /app/config/*.conf
+```
+
+### In-Place Editing
+
+The `-i` flag edits the file directly. Always create a backup first.
+
+```bash
+# Create backup and edit in place
+sed -i.bak 's/old/new/g' config.conf
+
+# Edit in place (no backup)
+sed -i 's/DEBUG/WARNING/g' app.log
+
+# Edit in place with backup suffix
+sed -i'.backup-2026-05-23' 's/DEBUG/WARNING/g' app.log
+```
+
+### Real Production Example: Rotating Log Timestamps
+
+Your application logs in a custom format, and you need to standardize them for your SIEM ingestion:
+
+```
+Original: [2026-05-23 14:30:15] ERROR: Connection timeout
+Target:   2026-05-23T14:30:15Z ERROR: Connection timeout
+```
+
+```bash
+# Remove brackets and add Z suffix for UTC
+sed -i 's/\[//g; s/\]/Z/g; s/ \([0-9][0-9]:[0-9][0-9]:[0-9][0-9]\)/T\1/' app.log
+```
+
+### Regex Patterns
+
+```bash
+# Replace all IPs with a masked version
+sed 's/[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}/xxx.xxx.xxx.xxx/g' access.log
+
+# Change only lines containing a pattern
+sed '/ERROR/ s/old_database/new_database/g' config.conf
+
+# Replace email addresses (user@domain.com -> user@REDACTED.com)
+sed 's/[A-Za-z0-9._%+-]\+@[A-Za-z0-9.-]\+\.[A-Za-z]\{2,\}/USER@REDACTED.com/g' logs.txt
+```
+
+### Real Production Example: Anonymizing Logs for Debugging
+
+You need to share application logs with a third-party vendor for debugging, but they contain sensitive customer data:
+
+```bash
+# Replace email addresses
+sed 's/[a-zA-Z0-9._%+-]\+@[a-zA-Z0-9.-]\+\.[a-zA-Z]\{2,\}/REDACTED_EMAIL/g' app.log
+
+# Replace phone numbers (various formats)
+sed 's/[0-9]\{3\}[-.\s]\?[0-9]\{3\}[-.\s]\?[0-9]\{4\}/REDACTED_PHONE/g' app.log
+
+# Replace credit card patterns (16 digits with optional separators)
+sed 's/[0-9]\{4\}[- ]\?[0-9]\{4\}[- ]\?[0-9]\{4\}[- ]\?[0-9]\{4\}/REDACTED_CC/g' app.log
+
+# Replace IP addresses
+sed 's/[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}/0.0.0.0/g' app.log
+```
+
+### Line Operations
+
+```bash
+# Delete lines matching a pattern
+sed '/DEBUG/d' app.log
+
+# Print specific lines (lines 5-10)
+sed -n '5,10p' app.log
+
+# Insert text before a line
+sed '/Production/i # Warning: Edit carefully' config.conf
+
+# Replace a specific line number
+sed -i '3s/old_value/new_value/' config.conf
+```
+
+### Real Production Example: Cleaning Up Ansible Output
+
+Your Ansible runs produce verbose output, but you only need the changed hosts for reporting:
+
+```bash
+# Extract only changed hosts from ansible output
+cat ansible-output.log | sed -n '/^changed: \[/p' | sed 's/^changed: \[//; s/\]//'
+
+# Remove timestamp prefixes from application logs
+sed 's/^[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}T[0-9]\{2\}:[0-9]\{2\}:[0-9]\{2\}Z //' app.log
+
+# Extract just error messages (remove level prefixes)
+cat app.log | sed 's/^ERROR: //; s/^WARN: //; s/^INFO: //'
+```
+
+### Multi-Command Sequences
+
+Sed can run multiple commands in sequence using `-e`:
+
+```bash
+# Multiple replacements in one pass
+sed -e 's/foo/bar/g' -e 's/baz/qux/g' file.txt
+
+# Chaining operations: remove comments, blank lines, then replace values
+sed -e '/^#/d' -e '/^$/d' -e 's/old/new/g' config.conf
+```
+
+### Real Production Example: Nginx Access Log Parsing
+
+Your nginx access log format is:
+```
+127.0.0.1 - frank [10/Oct/2023:13:55:36 -0700] "GET /apache_pb.gif HTTP/1.1" 200 2326 "http://example.com/start.html" "Mozilla/4.0"
+```
+
+You want to extract just the IPs and URLs for analysis:
+
+```bash
+# Extract client IPs
+cat access.log | sed 's/^\([0-9.]*\).*/\1/' | sort | uniq -c | sort -rn | head -20
+
+# Extract requested URLs
+cat access.log | sed 's/.*"GET \(.*\) HTTP.*/\1/' | sort | uniq -c | sort -rn | head -20
+
+# Extract status codes
+cat access.log | sed 's/.*HTTP\/1\.1" \([0-9]*\).*/\1/' | sort | uniq -c | sort -rn
+```
+
+### Address Syntax
+
+Sed can apply commands only to specific lines:
+
+```bash
+# Only on lines 1-10
+sed '1,10s/old/new/g' file
+
+# Only on lines matching a pattern
+sed '/error/s/old/new/g' file
+
+# Only on the last line
+sed '$s/old/new/' file
+
+# Every other line (odd lines)
+sed 'n;d' file
+```
+
+### Real Production Example: Updating Configuration Values
+
+You need to update the max connections setting across all your nginx upstream blocks:
+
+```nginx.conf
+# Before
+upstream backend {
+    server 10.0.0.5:8080;
+    server 10.0.0.6:8080;
+    max_conns 100;
+}
+
+# After
+upstream backend {
+    server 10.0.0.5:8080;
+    server 10.0.0.6:8080;
+    max_conns 500;
+}
+```
+
+```bash
+# Find and update only the max_conns directive
+sed -i '/upstream/,/}/ { /max_conns/ s/100/500/; }' /etc/nginx/nginx.conf
+
+# Or for a specific upstream block only
+sed -i '/upstream api_backend/,/}/ { /max_conns/ s/100/500/; }' /etc/nginx/nginx.conf
+```
+
+### Case Studies: sed in Action
+
+**Scenario: Fixing broken cron job timestamps**
+
+Your cron jobs are logging with a custom format, but your log analyzer expects ISO 8601. The cron output is:
+```
+May 23 14:30:15 servername CRON[12345]: (root) CMD (/opt/scripts/backup.sh)
+```
+
+You need:
+```
+2026-05-23T14:30:15 servername CRON[12345]: (root) CMD (/opt/scripts/backup.sh)
+```
+
+```bash
+# Transform the timestamp
+sed -E 's/^([A-Za-z]+ [ 0-9]+ [0-9]+:[0-9]+:[0-9]+)/2026-\1/' cron.log | \
+sed 's/  / /g'
+```
+
+**Scenario: Merging multi-line logs into single lines**
+
+Your Java application logs stack traces across multiple lines:
+```
+2026-05-23 14:30:15 ERROR Database connection failed
+java.sql.SQLException: Connection timeout
+    at com.example.DB.connect(DB.java:45)
+    at com.example.API.handleRequest(API.java:78)
+2026-05-23 14:30:16 INFO Request processed
+```
+
+```bash
+# Join lines starting with whitespace (continuation) to previous line
+sed ':a; N; s/\n[[:space:]]/ /; ba' app.log
+```
+
+### Alternate Delimiters
+
+When your pattern contains slashes, use a different delimiter to avoid escaping.
+
+```bash
+# Instead of: sed 's/http:\/\/old.com/http:\/\/new.com/g'
+sed 's|http://old.com|http://new.com|g' file.txt
+
+# Instead of: sed 's/\/var\/www\/html/\/var\/www\/vhosts/g'
+sed 's|/var/www/html|/var/www/vhosts|g' config.conf
+
+# Using # as delimiter for path substitution
+sed 's#http://#https://#g' nginx.conf
+```
+
+---
+
+## 3. awk: The Analyst
+
+awk is the bridge between one-line filtering and small programs. It reads records, splits each record into fields, checks patterns, and runs actions. For many operations tasks, that model is exactly enough: extract the first field from an access log, print rows where a status code is high, sum a latency column, or count requests by endpoint.
+
+The default field separator is whitespace, which makes awk pleasant for logs and command output that already behave like columns.
+
+### Field Extraction
+
+```bash
+# Print entire line
+awk '{print}' file.txt
+
+# Print specific fields
+awk '{print $1}' file.txt      # First field
+awk '{print $1, $3}' file.txt   # First and third
+awk '{print $NF}' file.txt      # Last field
+
+# Field separator (colon for /etc/passwd)
+awk -F: '{print $1}' /etc/passwd
+awk -F',' '{print $2}' data.csv
+```
+
+### Real Production Example: Apache Access Log Analysis
+
+Your Apache access log format:
+```
+192.168.1.100 - - [23/May/2026:14:30:15 +0000] "GET /api/users HTTP/1.1" 200 1234 "https://app.example.com" "Mozilla/5.0"
+```
+
+```bash
+# Extract just IPs
+awk '{print $1}' access.log | sort | uniq -c | sort -rn
+
+# Extract IP and status code
+awk '{print $1, $NF}' access.log | awk -F'"' '{print $1, $2}' | head -20
+
+# Find all 5xx errors
+awk '$NF ~ /5[0-9][0-9]/ {print $1, $NF}' access.log
+
+# Extract top requested URLs
+awk -F'"' '{print $2}' access.log | awk '{print $2}' | sort | uniq -c | sort -rn | head -10
+```
+
+### Built-in Variables
+
+| Variable | Description |
+|----------|-------------|
+| `$0` | Entire line |
+| `$1-$n` | Fields |
+| `NF` | Number of fields |
+| `NR` | Record (line) number |
+| `FS` | Field separator |
+| `OFS` | Output field separator |
+
+```bash
+# Add line numbers
+awk '{print NR, $0}' file.txt
+
+# Count total lines
+awk 'END {print NR}' file.txt
+
+# Print last field of each line
+awk '{print $NF}' file.txt
+```
+
+### Pattern-Action Pairs
+
+Treat patterns as "when this is true, do that."
+
+```bash
+# Print lines containing a pattern
+awk '/error/ {print}' file.txt
+
+# Conditional filtering
+awk '$3 > 100 {print}' file.txt      # Column 3 greater than 100
+awk '$1 == "root" {print}' /etc/passwd
+awk 'NR > 10 {print}' file.txt        # Skip first 10 lines
+
+# BEGIN and END blocks
+awk 'BEGIN {print "Header"} {print} END {print "Footer"}' file.txt
+```
+
+### Real Production Example: Database Slow Query Log Analysis
+
+Your PostgreSQL slow query log entries look like:
+```
+2026-05-23 14:30:15.123 UTC [12345] LOG:  duration: 2456.234 ms  statement: SELECT * FROM users WHERE email = 'test@example.com'
+```
+
+```bash
+# Extract query duration and normalize to seconds
+awk '/duration:/ {match($4, /[0-9.]+/); duration = substr($4, RSTART, RLENGTH); print duration/1000 "s", $NF}' slowquery.log
+
+# Find queries over 1 second
+awk '/duration:/ && $4 ~ /[0-9]+\.[0-9]+/ {split($4,a,":"); if (a[1]+0 > 1) print}' slowquery.log
+
+# Group by query pattern (remove literals)
+awk '/statement:/ {
+    sub(/WHERE.*/, "WHERE ...", $0);
+    sub(/VALUES.*/, "VALUES ...", $0);
+    count[$0]++
+}
+END {for (q in count) print count[q], q}' slowquery.log | sort -rn
+```
+
+### Calculations
+
+```bash
+# Sum a column
+awk '{sum += $1} END {print sum}' file.txt
+
+# Average
+awk '{sum += $1; count++} END {print sum/count}' file.txt
+
+# Maximum
+awk 'NR==1 || $1>max {max=$1} END {print max}' file.txt
+
+# Formatted output
+awk '{printf "%-10s %5d\n", $1, $2}' file.txt
+```
+
+### Real Production Example: System Resource Summary
+
+Generate a daily resource usage report:
+
+```bash
+# From sar output or /proc/stat
+# Calculate average CPU usage from multiple samples
+awk '/^%idle/ {next} /^Average/ {next} {sum+=$NF; count++} END {print "Average idle:", sum/count "%"}' cpu.log
+
+# Find peak memory usage
+awk '/MemTotal/ {total=$2} /MemAvailable/ {avail=$2} END {print "Used:", (total-avail)/1024/1024 "GB"}' meminfo.txt
+
+# Calculate network throughput from iptables stats
+awk '/Chain INPUT/,/packets/ {if ($2 ~ /^[0-9]+$/) bytes+=$2} END {print "Total INPUT bytes:", bytes/1024/1024 "MB"}' iptables.log
+```
+
+### Associative Arrays
+
+Arrays let awk group data without a separate database.
+
+```bash
+# Count by field
+awk '{count[$1]++} END {for (k in count) print k, count[k]}' file.txt
+
+# Sum by group
+awk '{sum[$1] += $2} END {for (k in sum) print k, sum[k]}' file.txt
+
+# Unique values
+awk '!seen[$1]++' file.txt
+```
+
+### Real Production Example: Top Endpoints by Response Time
+
+```bash
+# Parse nginx logs and find slowest endpoints
+awk -F'"' '{
+    split($2, parts, " ");
+    url = parts[2];
+    split($NF, status, " ");
+    code = status[1]+0;
+    if (code >= 200 && code < 300) success[url]++;
+    else errors[url]++
+}
+END {
+    print "=== Successes by URL ===";
+    for (u in success) print success[u], u;
+    print "=== Errors by URL ===";
+    for (u in errors) print errors[u], u
+}' access.log | sort -rn | head -20
+```
+
+### Advanced awk Patterns
+
+```bash
+# Multi-dimensional arrays (simulated)
+awk '{
+    arr[$1][$2]++
+}
+END {
+    for (i in arr)
+        for (j in arr[i])
+            print i, j, arr[i][j]
+}' file.txt
+
+# Functions in awk
+awk '
+function abs(x) { return x < 0 ? -x : x }
+{ delta = $1 - prev; if (NR > 1) print abs(delta); prev = $1 }
+' data.txt
+
+# Custom field separators
+awk -F'[;:]' '{print $1, $3}' file.txt   # Split by ; or :
+awk 'BEGIN {FS="[,;]"} {print $1, $3}' file.txt
+```
+
+### Real Production Example: Security Event Correlation
+
+Your SIEM is down, but you need to correlate SSH failures with successful logins to find compromised accounts:
+
+```bash
+# Extract all SSH events
+grep "sshd" /var/log/auth.log | awk -F: '{
+    datetime = $1 ":" $2 ":" $3;
+    if ($0 ~ /Failed password/) {
+        split($NF, parts, " ");
+        user = parts[3];
+        ip = parts[9];
+        failed[user][ip]++;
+        failed_time[user][ip] = datetime
+    }
+    if ($0 ~ /Accepted password/) {
+        split($NF, parts, " ");
+        user = parts[3];
+        ip = parts[7];
+        success[user][ip]++;
+    }
+}
+END {
+    print "=== SUSPICIOUS ACTIVITY ===";
+    for (u in failed) {
+        for (ip in failed[u]) {
+            if (success[u] > 0) {
+                print "COMPROMISED:", u, "IP:", ip, "Failed:", failed[u][ip], "Success:", success[u]+0
+            }
+        }
+    }
+}' | sort -k5 -rn
+```
+
+This identifies accounts that had both failed attempts AND successful logins—potentially an attacker who found weak credentials.
+
+### String Functions in awk
+
+```bash
+# length, substr, index, gsub
+awk '{
+    if (length($0) > 80) print "Long line:", $0
+    print "First 10 chars:", substr($0, 1, 10)
+}' file.txt
+
+# Replace all occurrences
+awk '{gsub(/ERROR/, "ALERT"); print}' app.log
+
+# Split into array
+awk '{
+    n = split($1, parts, "/");
+    print "Domain:", parts[n-1], "TLD:", parts[n]
+}' url_list.txt
+```
+
+> **Stop and think:** Running `awk '!seen[$1]++'` against a 50GB access log with highly randomized, unique data points can exhaust system memory. For unbounded values like request IDs, prefer `sort | uniq` or streaming approximations instead.
+
+---
+
+## Combining All Three: The 3 AM Incident
+
+A junior engineer once joined an incident where payment processing had stopped for a subset of customers. They SSH'd into the host, opened `/var/log/app.log` in a terminal editor, and began searching manually. The file was several gigabytes, the editor became sluggish, and each attempt to jump around the file added more frustration than evidence.
+
+A senior engineer joined the call and reduced the question to a stream problem: find payment-related lines, keep the error lines, and show only the latest few matches.
+
+```bash
+grep -i "payment" /var/log/app.log | grep -i "error" | tail -20
+```
+
+The answer appeared quickly: a third-party payment gateway endpoint had changed, and the local configuration still pointed at the old path. The fix was a one-line configuration update, but the real lesson was about **time-to-evidence**.
+
+The discipline also prevents false confidence. A command that returns nothing is not proof that the problem does not exist—it only proves your search did not find a match in the places you selected. When a zero-result search matters, inspect the scope: did the wildcard match files, did permissions hide directories, and did the pattern match the way the application logs the concept?
+
+---
+
+## Appendix: Sample Log Files for Practice
+
+For learning, create these sample files and practice the commands:
+
+**sample-access.log** (nginx format):
+```
+192.168.1.100 - - [23/May/2026:14:30:15 +0000] "GET /api/users HTTP/1.1" 200 1234 "-" "Mozilla/5.0"
+192.168.1.101 - - [23/May/2026:14:30:16 +0000] "POST /api/orders HTTP/1.1" 201 5678 "-" "curl/7.68.0"
+192.168.1.102 - - [23/May/2026:14:30:17 +0000] "GET /api/products HTTP/1.1" 200 9012 "-" "PostmanRuntime/7.28.0"
+192.168.1.100 - - [23/May/2026:14:30:18 +0000] "GET /nonexistent HTTP/1.1" 404 123 "-" "Mozilla/5.0"
+192.168.1.103 - - [23/May/2026:14:30:19 +0000] "GET /api/search?q=test HTTP/1.1" 500 89 "-" "axios/0.21.1"
+```
+
+**sample-config.conf**:
+```apache
+# Sample configuration file
+ServerName production-server
+ServerPort 8080
+
+# Database connection
+db_host=localhost
+db_port=5432
+db_name=production
+db_user=admin
+db_password=SECRET123
+
+# API endpoints
+api_v1=https://api.example.com/v1
+api_v2=https://api.example.com/v2
+
+# Feature flags
+ENABLE_CACHE=true
+DEBUG_MODE=false
+LOG_LEVEL=INFO
+```
+
+Practice commands:
+```bash
+# From sample-access.log
+grep "404" sample-access.log
+awk '{print $1, $NF}' sample-access.log | grep "Mozilla"
+awk '$9+0 > 300 {print}' sample-access.log
+sed 's/localhost/127.0.0.1/g' sample-config.conf
+
+# From sample-config.conf
+grep "^db_" sample-config.conf | awk -F= '{print $1, $2}'
+sed 's/SECRET123/REDACTED/g' sample-config.conf
+awk -F= '{if ($2 ~ /true/) print $1}' sample-config.conf
+```
+
+---
+
+## Quick Reference
+
+### grep Quick Reference
+
+| Command | Use Case |
+|---------|----------|
+| `grep -r "text" .` | Recursive search |
+| `grep -i "text" file` | Case-insensitive |
+| `grep -n "text" file` | Show line numbers |
+| `grep -c "text" file` | Count matches |
+| `grep -l "text" *.log` | Show filenames only |
+| `grep -v "text" file` | Invert (exclude) |
+| `grep -w "word" file` | Whole word only |
+| `grep -A 5 "text" file` | 5 lines after |
+| `grep -B 5 "text" file` | 5 lines before |
+| `grep -C 5 "text" file` | 5 lines context |
+
+### sed Quick Reference
+
+| Command | Use Case |
+|---------|----------|
+| `sed 's/old/new/' file` | Replace first per line |
+| `sed 's/old/new/g' file` | Replace all per line |
+| `sed -i.bak 's/old/new/g' file` | In-place with backup |
+| `sed '/pattern/d' file` | Delete matching lines |
+| `sed -n '5p' file` | Print line 5 |
+| `sed '1,10s/old/new/' file` | Replace in lines 1-10 |
+| `sed '/pattern/s/old/new/' file` | Replace on matching lines |
+
+### awk Quick Reference
+
+| Command | Use Case |
+|---------|----------|
+| `awk '{print $1}' file` | Print first field |
+| `awk -F: '{print $1}' file` | Colon delimiter |
+| `awk 'NR>1 {print}' file` | Skip header |
+| `awk '/pattern/ {print}' file` | Pattern match |
+| `awk '$3 > 100 {print}' file` | Conditional |
+| `awk '{sum+=$1} END {print sum}' file` | Sum column |
+| `awk '{count[$1]++} END {for(k in count) print k, count[k]}'` | Group and count |
+
+---
+
+## The Power Combo: find + grep + Pipes
+
+Experienced Linux users rarely think of find, grep, pipes, and redirection as separate topics. They combine them into small evidence-gathering systems.
+
+```bash
+# Find config files containing a database host
+find /etc -name "*.conf" -exec grep -l "db.example.com" {} \;
+
+# Find in Python files and show line numbers
+find . -name "*.py" | xargs grep -n "def process_order"
+
+# Find large recent log files
+find /var/log -name "*.log" -size +10M -mtime -1 -exec ls -lh {} \;
+
+# Count TODOs in source files
+find . -name "*.js" -o -name "*.ts" | xargs grep -c "TODO" | grep -v ":0$"
+
+# Kill a runaway process safely
+ps aux | grep "[r]unaway_script" | awk '{print $2}' | xargs kill
+```
+
+The `-exec` and `xargs` choice is a performance and safety decision, not a style preference. `find ... -exec ... \;` is straightforward and handles unusual filenames well, but it can start thousands of processes if thousands of files match. xargs batches work efficiently, but you must use null-delimited forms when filenames contain spaces or unusual characters.
+
+---
+
+## Quick Reference
+
+| Task | Command |
+|------|---------|
+| Find pattern | `grep "error" file.log` |
+| Case-insensitive | `grep -i "error" file.log` |
+| Count matches | `grep -c "500" file.log` |
+| Context lines | `grep -C 2 "error" file.log` |
+| Line numbers | `grep -n "error" file.log` |
+| Invert match | `grep -v "DEBUG" file.log` |
+| Whole word | `grep -w "error" file.log` |
+| In-place replace | `sed -i 's/old/new/g' file` |
+| Mask IPs | `sed 's/[0-9.]*/REDACTED/g' file` |
+| Delete lines | `sed '/DEBUG/d' file` |
+| Print column | `awk '{print $1}' file` |
+| Sum column | `awk '{sum+=$1} END {print sum}' file` |
+| Filter rows | `awk '$3 > 100' file` |
+| Count by group | `awk '{count[$1]++} END {for(k in count) print k, count[k]}' file` |
+
+---
+
+These tools aren't relics—they're precision instruments. When your phone buzzes at 2 AM, you'll be ready.
