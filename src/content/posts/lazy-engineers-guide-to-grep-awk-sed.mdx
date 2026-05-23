@@ -1,18 +1,21 @@
 ---
 title: "The Lazy Engineer's Guide to grep, awk, and sed"
 description: "A practical survival guide for finding, fixing, and analyzing text in production without losing your mind."
-date: "2026-05-23"
+date: "2026-04-23"
 tags: ["devops", "linux", "bash", "log-analysis"]
 image: "/linux-commands-og.svg"
 published: true
 ---
 
-Every engineer reaches that moment at 2 AM. You're staring at a 10GB log file, your IDE is chugging, and you just want to find why your payment system are failing. You could open the file. You could wait. Or you could pipe it through three commands and have your answer in seconds.
+It is 2 AM. You're staring at a large log file, your IDE is lagging, every log feels the same  and you just want to find why your payment system are failing. You could open the file. You could wait. Or you could pipe it through three commands and have your answer in seconds.
 
 `grep`, `awk`, and `sed` are the tools that make engineers look like they know what they're doing. They're not glamorous. They don't have splashy GUIs. But they turn chaos into clarity when you know how to use them.
 
 This guide skips the theory and goes straight to production. Real scenarios, real commands, real fixes. For the lazy engineer.
 
+
+
+> This blog is still a work in progress, I am trying to learn as well !
 ---
 
 ## 1. grep: Searching Inside Files
@@ -53,17 +56,14 @@ But you need context. How many of these errors? Are they concentrated on a speci
 grep "502" /var/log/nginx/error.log | wc -l
 
 # Get unique upstream endpoints causing 502s
-grep "502" /var/log/nginx/error.log | grep -oP 'upstream "[^"]+' | sort | uniq -c | sort -rn
+grep "502" /var/log/nginx/error.log | awk -F'"' '{print $2}' | sort | uniq -c | sort -rn
 
 # Find which backend servers are failing
-grep "upstream prematurely closed" /var/log/nginx/error.log | grep -oP 'client: \K[0-9.]+' | sort | uniq
+grep "upstream prematurely closed" /var/log/nginx/error.log | awk '{print $NF}' | awk -F: '{print $2}' | sort | uniq
 ```
 
 The grep output might reveal that 90% of your 502s are hitting `upstream "php_backend"` while `node_backend` is fine. That's your signal to check PHP-FPM status and configuration.
 
-### When to Use Case Sensitivity
-
-Case sensitivity is a choice about signal and noise. During early triage, `grep -i` helps catch inconsistent capitalization across tools and languages. During a precise audit, case-sensitive matching may be safer because it avoids unrelated words. The point is not that one flag is always right—choose based on the question you're asking.
 
 ### Context Flags
 
@@ -95,7 +95,8 @@ Your server is being targeted. You're getting alerts that load is spiking, and y
 grep "Failed password" /var/log/auth.log
 
 # Get the top offending IP addresses
-grep "Failed password" /var/log/auth.log | grep -oP '\d+\.\d+\.\d+\.\d+' | sort | uniq -c | sort -rn | head -20
+# Linux: grep -oP | macOS: use awk below instead
+grep "Failed password" /var/log/auth.log | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sort | uniq -c | sort -rn | head -20
 
 # See when the attacks started (timestamp patterns)
 grep "Failed password" /var/log/auth.log | awk '{print $1, $2}' | sort | uniq -c
@@ -104,7 +105,6 @@ grep "Failed password" /var/log/auth.log | awk '{print $1, $2}' | sort | uniq -c
 grep "Accepted password" /var/log/auth.log | tail -50
 ```
 
-The output might show you have 15,000 failed attempts from 200 unique IPs over the past hour, but zero successful logins. That's either good news (attacks failing) or bad news (you're blocking legitimate users). The timestamp breakdown might show the attacks started at 4 AM UTC when your US users are sleeping.
 
 ### Counting and Listing
 
@@ -200,7 +200,7 @@ Your monitoring shows high memory usage on a server. Quick triage:
 ```bash
 # Find Java processes and their memory usage
 ps aux | grep java | grep -v grep | awk '{print $11, $6/1024 "MB"}'
-
+> **Stop and think:** If you use `grep -v "INFO" app.log | grep -v "DEBUG"`, which log levels are you isolating, and what useful lines might you accidentally remove? Negative filters reduce noise, but every exclusion is also a bet about what does not matter.
 # Find all processes running as root that aren't init or sshd
 ps aux | grep root | grep -v "^\S*\s*root\s*1 " | grep -v sshd | grep -v grep
 
