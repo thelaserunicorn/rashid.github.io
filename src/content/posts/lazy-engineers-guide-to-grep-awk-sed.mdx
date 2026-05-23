@@ -1,17 +1,17 @@
 ---
 title: "The Lazy Engineer's Guide to grep, awk, and sed"
 description: "A practical survival guide for finding, fixing, and analyzing text in production without losing your mind."
-date: "2026-04-23"
+date: "2026-05-23"
 tags: ["devops", "linux", "bash", "log-analysis"]
 image: "/linux-commands-og.svg"
 published: true
 ---
 
-NOTE: This is a draft
+Every engineer reaches that moment at 2 AM. You're staring at a 10GB log file, your IDE is chugging, and you just want to find why payments are failing. You could open the file. You could wait. Or you could pipe it through three commands and have your answer in seconds.
 
-These three Unix tools are the bread and butter of any engineer. They transform a chaotic wall of text into actionable evidence. They let you ask questions of your data instead of manually digging through it. This guide is your survival kit—written for the engineer who needs results now, not a computer science lecture.
+`grep`, `awk`, and `sed` are the tools that make engineers look like they know what they're doing. They're not glamorous. They don't have splashy GUIs. But they turn chaos into clarity—when you know how to use them.
 
-We'll cover real production scenarios: nginx configuration debugging, Apache access log analysis, SSH authentication failure hunting, database slow query identification, and systemd service log parsing. Each example comes from actual incidents I've seen or personally debugged at 3 AM.
+This guide skips the theory and goes straight to production. nginx configs, Apache logs, SSH attacks, database slow queries. Real scenarios, real commands, real fixes.
 
 ---
 
