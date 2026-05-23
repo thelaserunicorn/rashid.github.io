@@ -17,6 +17,7 @@ export interface PostMeta {
   title: string;
   date: string;
   description: string;
+  image?: string;
 }
 
 export interface Post extends PostMeta {
@@ -46,6 +47,7 @@ export function getPostBySlug(slug: string): Post | null {
     title: data.title,
     date: String(data.date),
     description: data.description,
+    image: data.image,
     content,
   };
 }
@@ -61,6 +63,7 @@ export function getAllPosts(): PostMeta[] {
         title: post.title,
         date: post.date,
         description: post.description,
+        image: post.image,
       };
     })
     .filter((post): post is PostMeta => post !== null)

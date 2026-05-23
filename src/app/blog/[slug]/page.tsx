@@ -20,6 +20,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const post = getPostBySlug(slug);
   if (!post) return {};
+  const imageUrl = post.image || "/og-image.svg";
   return {
     title: post.title,
     description: post.description,
@@ -30,7 +31,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       url: `https://rashid.pages.dev/blog/${slug}`,
       images: [
         {
-          url: "/og-image.svg",
+          url: imageUrl,
           width: 1200,
           height: 630,
           alt: post.title,
@@ -41,7 +42,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       card: "summary_large_image",
       title: post.title,
       description: post.description,
-      images: ["/og-image.svg"],
+      images: [imageUrl],
     },
   };
 }

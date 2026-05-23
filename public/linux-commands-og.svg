@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect fill="#1a1918" width="1200" height="630"/>
+  <text x="600" y="280" text-anchor="middle" font-family="system-ui, sans-serif" font-size="48" fill="#e8e6e0" font-weight="bold">Essential Linux Commands</text>
+  <text x="600" y="340" text-anchor="middle" font-family="system-ui, sans-serif" font-size="24" fill="#9a9890">A practical guide for beginners</text>
+  <text x="600" y="400" text-anchor="middle" font-family="monospace" font-size="20" fill="#c46345">$ ls -la</text>
+  <line x1="500" y1="440" x2="700" y2="440" stroke="#c46345" stroke-width="3"/>
+</svg>
