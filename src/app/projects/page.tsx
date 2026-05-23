@@ -2,52 +2,28 @@ import Link from "next/link";
 
 const projects = [
   {
-    title: "Portfolio",
-    description: "Minimal portfolio with Next.js and markdown blog",
-    tech: ["Next.js", "TypeScript", "Tailwind"],
-    link: "https://github.com/thelaserunicorn/thelaserunicorn.github.io",
+    title: "GitPeek",
+    description: "CLI tool that fetches and displays your GitHub commits (today and this week), grouped by repository",
+    tech: ["Go", "CLI", "GitHub API"],
+    link: "https://github.com/thelaserunicorn/gitpeek",
   },
   {
-    title: "Task API",
-    description: "RESTful API with Node.js, Express, PostgreSQL",
-    tech: ["Node.js", "Express", "PostgreSQL"],
-    link: "#",
+    title: "Snippetbox",
+    description: "Web application that lets people paste and share snippets of text — like Pastebin or GitHub Gists",
+    tech: ["Go", "HTML/CSS", "SQL"],
+    link: "https://github.com/thelaserunicorn/snippetbox",
   },
   {
-    title: "Weather App",
-    description: "Real-time weather dashboard with visualizations",
-    tech: ["React", "OpenWeather", "Chart.js"],
-    link: "#",
+    title: "Monkey",
+    description: "A small, interpreted or compiled programming language written in Go with C-like syntax",
+    tech: ["Go", "Interpreter", "Lexer"],
+    link: "https://github.com/thelaserunicorn/monkey",
   },
   {
-    title: "Notes App",
-    description: "Note-taking with markdown and local storage",
-    tech: ["Vue.js", "LocalStorage", "Markdown"],
-    link: "#",
-  },
-  {
-    title: "URL Shortener",
-    description: "URL shortening with analytics and QR codes",
-    tech: ["Python", "FastAPI", "SQLite"],
-    link: "#",
-  },
-  {
-    title: "Chat App",
-    description: "Real-time messaging with WebSockets",
-    tech: ["Node.js", "Socket.io", "Redis"],
-    link: "#",
-  },
-  {
-    title: "E-commerce",
-    description: "Full-featured online store with payments",
-    tech: ["Next.js", "Stripe", "PostgreSQL"],
-    link: "#",
-  },
-  {
-    title: "CLI Tools",
-    description: "Collection of useful command-line utilities",
-    tech: ["Rust", "CLI", "TUI"],
-    link: "#",
+    title: "Goku",
+    description: "CLI tool to convert between JSON and YAML formats",
+    tech: ["Go", "CLI", "JSON/YAML"],
+    link: "https://github.com/thelaserunicorn/goku",
   },
 ];
 
