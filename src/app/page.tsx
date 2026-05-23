@@ -27,9 +27,9 @@ export default function Home() {
       <section className="space-y-4">
         <h2 className="font-serif text-2xl text-foreground">About Me</h2>
         <p className="text-secondary leading-relaxed font-sans">
-          I&apos;m a software developer passionate about building minimal,
-          functional applications. When I&apos;m not coding, you can find me
-          exploring new technologies or documenting what I learn.
+          I&apos;m interested in distributed systems and backend engineering. I
+          enjoy building scalable applications and documenting what I
+          learn along the way.
         </p>
       </section>
 
