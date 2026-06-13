@@ -79,7 +79,7 @@ export default function RootLayout({
             </main>
             <footer className="border-t border-border">
               <div className="max-w-3xl mx-auto px-6 py-6 text-sm text-secondary font-sans">
-                &copy; {new Date().getFullYear()} Rashid
+                &copy; {new Date().getFullYear()} Rashid Iftekhar &middot; Thoughts on systems, software, and everything in between
               </div>
             </footer>
           </div>
