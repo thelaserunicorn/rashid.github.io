@@ -7,7 +7,9 @@ image: "/og-image.svg"
 published: true
 ---
 
-> **Disclaimer:** Everything in this article, such as, traffic numbers, failure modes, and architectural gaps is my own speculation, educated I hope but speculation nontheless. I was a viewer that night, not an engineer on either team. My reconstruction draws from public engineering talks, industry-standard streaming architecture, and documented practices from teams like JioCinema, Hotstar, and Netflix. The patterns are real; their application to Toffee and Bioscope specifically is not. If anyone from either team spots an error, I'd love to hear it.
+*The System Design That Could Have Saved Toffee and Bioscope*
+
+> **Disclaimer:** Everything in this article, such as traffic numbers, failure modes, and architectural gaps is my own speculation, educated I hope but speculation nonetheless. I was a viewer that night, not an engineer on either team. My reconstruction draws from public engineering talks, industry-standard streaming architecture, and documented practices from teams like JioCinema, Hotstar, and Netflix. The patterns are real; their application to Toffee and Bioscope specifically is not. If anyone from either team spots an error, I'd love to hear it.
 
 ## The Night Everything Broke
 
@@ -25,11 +27,11 @@ This is not a story about a bad product. Toffee and Bioscope are serious platfor
 
 This is a story about the systems, the patterns, and the architectural decisions that could have changed the outcome entirely.
 
-## Live Streaming Is A Different Ball Game
+## Live Streaming Is A Different Ball Vame
 
-Before we get into solutions, we need to understand why live sports streaming is categorically different from every other type of internet traffic.
+First, we need to understand why live sports streaming is different from regular streaming.
 
-Netflix exploits this beautifully: they pre-position popular content on their own CDN appliances *(check out OpenConnect by Netflix)* inside ISP data centers *before* anyone watches. When you hit play, the file is already sitting on a server in your city. The CDN cache hit rate approaches almost 100%.
+Netflix pre-position popular content on their own CDN appliances *(check out OpenConnect by Netflix)* inside ISP data centers *before* anyone watches. When you hit play, the file is already sitting on a server in your city. The CDN cache hit rate approaches almost 100%.
 
 Live sports breaks the assumption that makes this work.
 
