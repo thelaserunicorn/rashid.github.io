@@ -7,7 +7,7 @@ image: "/og-image.svg"
 published: true
 ---
 
-> **Disclaimer:** Everything in this article—the traffic numbers, the failure modes, the architectural gaps I attribute is my own assumption. I was a viewer that night, not an engineer on either team. I have no access to their internal systems, postmortems, or dashboards. What I've written is a reasonable reconstruction of what could explain what millions of us experienced, built from public engineering talks, industry-standard streaming architecture, and the documented practices of teams like JioCinema, Hotstar, and Netflix. The patterns are real. The application of those patterns to Toffee and Bioscope specifically is speculation—educated, I hope, but speculation nonetheless. If anyone from either team reads this and I've got something wrong, I'd genuinely love to hear it.
+> **Disclaimer:** Everything in this article, such as, traffic numbers, failure modes, and architectural gaps is my own speculation, educated I hope but speculation nontheless. I was a viewer that night, not an engineer on either team. My reconstruction draws from public engineering talks, industry-standard streaming architecture, and documented practices from teams like JioCinema, Hotstar, and Netflix. The patterns are real; their application to Toffee and Bioscope specifically is not. If anyone from either team spots an error, I'd love to hear it.
 
 ## The Night Everything Broke
 
@@ -217,11 +217,12 @@ There's an honest conversation to be had here. Multi-CDN, pre-scaled fleets, Red
 
 But consider the alternative. A single catastrophic outage during a major FIFA match carries enormous costs: subscriber churn from users who experienced the failure, reputational damage amplified instantly by social media, lost advertising revenue from ads that were never served.
 
-## The Multi-CDN Optimizer
+## So How Did Other Platforms Scale?
+###  The Multi-CDN Optimizer
 
 JioCinema doesn't pick a CDN and trust it. They run a **real-time optimizer** that continuously measures latency, throughput, and error rates across multiple CDN providers simultaneously. Every DNS resolution routes a viewer to whichever CDN is performing best *right now* for their location. When Akamai's Mumbai nodes saturate during peak IPL, viewers shift silently to Fastly or CloudFront. No alert fires. No engineer intervenes. The routing layer handles it automatically. CDNs are not commodities. Their performance is highly geography-dependent and changes in real time under load.
 
-## Kafka
+### Kafka
 
 During peak IPL, JioCinema processes millions of events per second: view session starts, segment requests, ad impressions, quality switches, heartbeats. None of these touch a database synchronously.
 
@@ -229,7 +230,7 @@ Every non-critical data path publishes to **Kafka topics**. Separate consumer pr
 
 This is also how the "32M concurrent viewers" number gets computed in real time and displayed on screen. View events stream into Kafka, a streaming aggregator increments a counter, and the CDN serves the updated count. The count lags by a few seconds, which is entirely acceptable, rather than blocking on a database read-modify-write at 32 million QPS, which would be catastrophic.
 
-## Redis and Panic Mode
+### Redis and Panic Mode
 
 JioCinema's Redis layer caches everything that changes slowly: content metadata, stream URLs, subscription status, ad targeting profiles. During an IPL match, the database is rarely touched for the data that matters most. Nearly all reads are served from in-memory cache.
 
@@ -237,13 +238,13 @@ JioCinema's Redis layer caches everything that changes slowly: content metadata,
 
 It's a blunt instrument. Users might briefly see a cached subscription status that is slightly stale. But they will not see a loading spinner instead of cricket. For a live sports platform, that is the correct tradeoff.
 
-## Custom Autoscaling Metrics
+### Custom Autoscaling Metrics
 
 JioCinema doesn't scale on CPU. They scale on **active connection counts and request rates per server**—signals that correlate directly with streaming load and respond in seconds rather than minutes. Combined with aggressive pre-scaling based on match schedules, their fleet is at peak capacity before the first ball is bowled.
 
 The result: during IPL 2023, no significant autoscaling event fired during the match. The system was already where it needed to be.
 
-## Miscellaneous
+### Miscellaneous
 
 An interesting scenario I learnt from the articles was the importance of external and internal factors in increasing the traffic peak. External factors can be the **sudden rise in the concurrent traffic due to the batting of a popular cricketer (MS Dhoni, Virat Kohli) and the sudden dip when they get out.**
 
